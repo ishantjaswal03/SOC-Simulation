@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOC Analyst Simulation // Sector 7G</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #00f0ff; /* Neon Cyan */
+            --background-color: #050810;
+            --panel-bg-color: rgba(10, 25, 47, 0.85);
+            --border-color: rgba(0, 240, 255, 0.3);
+            --glow-color: rgba(0, 240, 255, 0.5);
+        }
+
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: var(--background-color);
+            background-image: 
+                radial-gradient(var(--border-color) 1px, transparent 1px),
+                radial-gradient(var(--border-color) 1px, transparent 1px);
+            background-size: 30px 30px;
+            background-position: 0 0, 15px 15px;
+            color: var(--primary-color);
+            text-shadow: 0 0 5px var(--glow-color);
+            overflow-y: auto;
+        }
+
+        .cyber-scrollbar::-webkit-scrollbar { width: 8px; }
+        .cyber-scrollbar::-webkit-scrollbar-track { background: #1f2937; }
+        .cyber-scrollbar::-webkit-scrollbar-thumb { background: var(--primary-color); border-radius: 4px; box-shadow: 0 0 5px var(--primary-color); }
+        
+        .blinking-cursor {
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        .scanline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,0.02) 50%, rgba(255,255,255,0));
+            animation: scan 7s linear infinite;
+        }
+        @keyframes scan {
+            0% { background-position: 0 0; }
+            100% { background-position: 0 100px; }
+        }
+
+        .header-title {
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+        }
+
+        .panel {
+            background: var(--panel-bg-color);
+            border: 1px solid var(--border-color);
+            backdrop-filter: blur(8px);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5), inset 0 0 15px var(--glow-color);
+            position: relative;
+            animation: fadeIn 0.5s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .panel::before, .panel::after, .panel > .corner-top-right::before, .panel > .corner-bottom-left::after {
+            content: '';
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border-color: var(--primary-color);
+            border-style: solid;
+            animation: glow-border 2s infinite alternate;
+        }
+        .panel::before { top: -2px; left: -2px; border-width: 2px 0 0 2px; }
+        .panel::after { top: -2px; right: -2px; border-width: 2px 2px 0 0; }
+        .panel > .corner-bottom-left::after { bottom: -2px; left: -2px; border-width: 0 0 2px 2px; }
+        .panel > .corner-top-right::before { bottom: -2px; right: -2px; border-width: 0 2px 2px 0; }
+
+        @keyframes glow-border {
+            from { box-shadow: 0 0 4px var(--primary-color); }
+            to { box-shadow: 0 0 12px var(--primary-color); }
+        }
+        
+        .alert-item {
+            transition: all 0.2s ease-in-out;
+            border-left-width: 4px;
+            background-color: rgba(0, 240, 255, 0.05);
+        }
+        .alert-item:hover {
+            transform: translateX(10px);
+            background-color: rgba(0, 240, 255, 0.15);
+            box-shadow: 0 0 10px var(--glow-color);
+        }
+        .alert-item.selected {
+             background-color: rgba(0, 240, 255, 0.2);
+             border-left-color: #fff !important;
+        }
+        
+        .btn-action, .nav-btn {
+            font-family: 'Orbitron', sans-serif;
+            background: transparent;
+            border: 2px solid;
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+        .btn-action:hover:not(:disabled), .nav-btn:hover {
+            background: var(--primary-color);
+            color: var(--background-color);
+            box-shadow: 0 0 15px var(--primary-color);
+            text-shadow: none;
+        }
+        .btn-action:disabled { opacity: 0.4; cursor: wait; }
+
+        .nav-btn { padding: 8px 16px; font-size: 0.9rem; opacity: 0.7; }
+        .nav-btn.active { opacity: 1; background: var(--primary-color); color: var(--background-color); text-shadow: none; box-shadow: 0 0 15px var(--primary-color); }
+
+        .status-nominal { color: #22c55e; text-shadow: 0 0 5px #22c55e; }
+        .status-elevated { color: #facc15; text-shadow: 0 0 5px #facc15; }
+        .status-critical { color: #ef4444; text-shadow: 0 0 5px #ef4444; }
+        
+        .ip-lookup { cursor: pointer; text-decoration: underline; text-decoration-style: dotted; }
+        .ip-lookup:hover { color: #fff; }
+
+        .cyber-table { width: 100%; border-collapse: collapse; }
+        .cyber-table th, .cyber-table td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .cyber-table th { font-family: 'Orbitron', sans-serif; font-size: 0.9em; }
+        .cyber-table tr:hover td { background-color: rgba(0, 240, 255, 0.1); }
+        .severity-Critical { color: #ef4444; }
+        .severity-High { color: #fb923c; }
+        .severity-Medium { color: #facc15; }
+        .severity-Low { color: #38bdf8; }
+        
+        .cyber-input {
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-color);
+            padding: 8px 12px;
+            width: 100%;
+            transition: all 0.2s;
+        }
+        .cyber-input:focus {
+            outline: none;
+            box-shadow: 0 0 10px var(--glow-color);
+            border-color: var(--primary-color);
+        }
+    </style>
+</head>
+<body class="p-4 lg:p-6">
+    <div class="scanline"></div>
+
+    <div id="simulation-container" class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <header class="mb-6 pb-4 border-b-2 border-[var(--border-color)]">
+            <div class="flex flex-col sm:flex-row justify-between items-center">
+                <div class="flex items-center gap-3 mb-4 sm:mb-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-[var(--primary-color)] animate-spin" style="animation-duration: 5s;" viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M10 3.5a1.5 1.5 0 013 0V4a1 1 0 001 1h.5a1.5 1.5 0 010 3H14a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V10a1 1 0 00-1-1h-.5a1.5 1.5 0 010-3H6a1 1 0 001-1v-.5a1.5 1.5 0 013 0V3.5zM6.5 10a1 1 0 00-1 1v.5a1.5 1.5 0 01-3 0V10a1 1 0 00-1-1H1a1.5 1.5 0 010-3h.5a1 1 0 001-1v-.5a1.5 1.5 0 013 0v.5a1 1 0 001 1h.5a1.5 1.5 0 010 3H6.5z" />
+                    </svg>
+                    <h1 class="text-2xl font-bold header-title">SOC Command Center</h1>
+                </div>
+                <div id="siem-stats" class="flex items-center gap-6 font-semibold header-title text-sm">
+                    <div>System Status: <span id="system-status" class="font-bold status-nominal">NOMINAL</span></div>
+                    <div>Score: <span id="score" class="font-bold text-green-400">0</span></div>
+                    <div>Alerts: <span id="alerts-remaining" class="font-bold text-yellow-400">0</span></div>
+                    <button id="restart-btn" class="btn-action !py-1 !px-3 !text-xs">Restart Sim</button>
+                </div>
+            </div>
+             <nav id="main-nav" class="flex justify-center gap-2 md:gap-4 mt-4 flex-wrap">
+                <button data-page="siem-page" class="nav-btn active rounded-md">SIEM Simulation</button>
+                <button data-page="vulnerability-page" class="nav-btn rounded-md">Vulnerability Management</button>
+                <button data-page="knowledgebase-page" class="nav-btn rounded-md">OWASP Top 10</button>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <div id="siem-page" class="page-content">
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+                    <div class="lg:col-span-2 panel p-4 rounded-lg">
+                        <div class="corner-top-right"></div><div class="corner-bottom-left"></div>
+                        <h2 class="text-xl font-semibold mb-3 border-b border-[var(--border-color)] pb-2 header-title">Threat Stream</h2>
+                        <div id="alerts-feed" class="h-96 lg:h-[65vh] overflow-y-auto space-y-2 pr-2 cyber-scrollbar flex flex-col"></div>
+                    </div>
+                    <div class="lg:col-span-3 panel p-6 rounded-lg">
+                        <div class="corner-top-right"></div><div class="corner-bottom-left"></div>
+                        <div id="analysis-panel" class="h-full overflow-y-auto cyber-scrollbar pr-2">
+                            <div id="initial-message" class="flex flex-col items-center justify-center h-full text-gray-400 opacity-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                <h3 class="text-xl font-semibold header-title">Awaiting Input...</h3>
+                                <p class="text-center mt-2">Select a threat from the stream to analyze.</p>
+                            </div>
+                            <div id="alert-details" class="hidden">
+                                <h3 id="details-title" class="text-2xl font-bold mb-2 text-white header-title"></h3>
+                                <div class="flex items-center gap-4 mb-4">
+                                    <span id="details-severity" class="text-sm font-semibold px-3 py-1 rounded-full border"></span>
+                                </div>
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div class="panel !shadow-none !bg-black/20 p-3 rounded">
+                                         <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm mb-2">Asset Info</h4>
+                                         <p><strong>Host:</strong> <span id="details-asset-host"></span></p>
+                                         <p><strong>OS:</strong> <span id="details-asset-os"></span></p>
+                                         <p><strong>User:</strong> <span id="details-asset-user"></span></p>
+                                         <p><strong>Location:</strong> <span id="details-asset-location"></span></p>
+                                    </div>
+                                    <div class="panel !shadow-none !bg-black/20 p-3 rounded">
+                                         <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm mb-2">Threat Intel</h4>
+                                         <div id="threat-intel-content">Scan an IP for details...</div>
+                                    </div>
+                                </div>
+                                <div class="space-y-4 text-gray-300">
+                                    <div>
+                                        <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm">Description</h4>
+                                        <p id="alert-description-p" class="p-3 bg-black/30 rounded-md mt-1 min-h-[40px]"></p>
+                                    </div>
+                                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm">Source IP</h4>
+                                            <p id="details-source-ip" class="p-3 bg-black/30 rounded-md mt-1 ip-lookup" data-ip=""></p>
+                                        </div>
+                                        <div>
+                                            <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm">Destination IP</h4>
+                                            <p id="details-dest-ip" class="p-3 bg-black/30 rounded-md mt-1 ip-lookup" data-ip=""></p>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <h4 class="font-semibold text-[var(--primary-color)] header-title text-sm">Recommendation</h4>
+                                        <p id="alert-recommendation-p" class="p-3 bg-black/30 rounded-md mt-1 min-h-[40px]"></p>
+                                    </div>
+                                </div>
+                                <div class="mt-6 border-t border-[var(--border-color)] pt-6">
+                                    <h4 class="font-semibold text-lg mb-4 text-white header-title">Response Protocol</h4>
+                                    <div id="details-actions" class="flex flex-wrap gap-4">
+                                        <button data-action="isolate" class="btn-action flex-grow py-3 px-4 rounded-lg">Isolate Host</button>
+                                        <button data-action="block_ip" class="btn-action flex-grow py-3 px-4 rounded-lg">Block IP</button>
+                                        <button data-action="false_positive" class="btn-action flex-grow py-3 px-4 rounded-lg">False Positive</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="vulnerability-page" class="page-content hidden">
+                <div class="panel p-6 rounded-lg">
+                    <div class="corner-top-right"></div><div class="corner-bottom-left"></div>
+                    <h2 class="text-2xl font-bold mb-4 header-title">Vulnerability Dashboard</h2>
+                    <div id="vuln-table-container" class="overflow-x-auto cyber-scrollbar"></div>
+                </div>
+            </div>
+
+            <div id="knowledgebase-page" class="page-content hidden">
+                <div class="panel p-6 rounded-lg">
+                    <div class="corner-top-right"></div><div class="corner-bottom-left"></div>
+                    <h2 class="text-2xl font-bold mb-4 header-title">OWASP Top 10 Knowledgebase</h2>
+                    <input type="text" id="kb-search" class="cyber-input rounded-md mb-4" placeholder="Search OWASP Top 10 (e.g., Injection, SSRF)...">
+                    <div id="kb-content" class="h-[65vh] overflow-y-auto pr-2 cyber-scrollbar"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <div id="modal" class="fixed inset-0 bg-black bg-opacity-90 flex items-center justify-center hidden z-50">
+        <div class="panel text-center max-w-md w-full p-8">
+             <div class="corner-top-right"></div><div class="corner-bottom-left"></div>
+            <h2 id="modal-title" class="text-3xl font-bold mb-4 header-title">Protocol Complete</h2>
+            <p id="modal-body" class="text-lg mb-6 text-gray-300"></p>
+            <button id="modal-close-btn" class="btn-action py-2 px-6">Re-initialize</button>
+        </div>
+    </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // --- GENERAL ---
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const pages = document.querySelectorAll('.page-content');
+    const siemStatsEl = document.getElementById('siem-stats');
+    
+    // --- SIEM ELEMENTS ---
+    const scoreEl = document.getElementById('score');
+    const alertsRemainingEl = document.getElementById('alerts-remaining');
+    const systemStatusEl = document.getElementById('system-status');
+    const alertsFeedEl = document.getElementById('alerts-feed');
+    const initialMessageEl = document.getElementById('initial-message');
+    const alertDetailsEl = document.getElementById('alert-details');
+    const restartBtn = document.getElementById('restart-btn');
+    const modalEl = document.getElementById('modal');
+    const modalTitleEl = document.getElementById('modal-title');
+    const modalBodyEl = document.getElementById('modal-body');
+    const modalCloseBtn = document.getElementById('modal-close-btn');
+
+    // --- SIEM DETAILS PANEL ELEMENTS ---
+    const detailsTitleEl = document.getElementById('details-title');
+    const detailsSeverityEl = document.getElementById('details-severity');
+    const detailsAssetHostEl = document.getElementById('details-asset-host');
+    const detailsAssetOsEl = document.getElementById('details-asset-os');
+    const detailsAssetUserEl = document.getElementById('details-asset-user');
+    const detailsAssetLocationEl = document.getElementById('details-asset-location');
+    const threatIntelContentEl = document.getElementById('threat-intel-content');
+    const alertDescriptionPEl = document.getElementById('alert-description-p');
+    const detailsSourceIpEl = document.getElementById('details-source-ip');
+    const detailsDestIpEl = document.getElementById('details-dest-ip');
+    const alertRecommendationPEl = document.getElementById('alert-recommendation-p');
+    const detailsActionsEl = document.getElementById('details-actions');
+    const actionButtons = detailsActionsEl.querySelectorAll('.btn-action');
+
+    // --- VULNERABILITY ELEMENTS ---
+    const vulnContainer = document.getElementById('vuln-table-container');
+
+    // --- KNOWLEDGEBASE ELEMENTS ---
+    const kbSearchInput = document.getElementById('kb-search');
+    const kbContentEl = document.getElementById('kb-content');
+
+    // --- STATE ---
+    let score = 0;
+    let activeAlerts = [];
+    let alertQueue = [];
+    let alertInterval;
+    let currentAlert = null;
+    
+    // --- DATA ---
+    const alertsData = [
+        { id: 1, severity: 'High', title: 'Potential Ransomware Activity', description: 'Multiple files on host being rapidly encrypted. Process "CryptoLocker.exe" detected.', source_ip: '192.168.1.105', destination_ip: 'N/A', recommendation: 'Immediately isolate host from network to prevent lateral movement. Investigate process.', isMalicious: true, correctAction: 'isolate', asset: { name: 'FS-01', os: 'Windows Server 2019', user: 'SYSTEM', location: 'Data Center' }, threatIntel: { '192.168.1.105': 'Internal IP, likely patient zero.' } },
+        { id: 2, severity: 'Medium', title: 'Multiple Failed Login Attempts', description: 'User account "admin" has 50 failed login attempts in 2 minutes from the same IP.', source_ip: '103.22.182.5', destination_ip: '10.0.0.10', recommendation: 'Block source IP at the firewall. Monitor the "admin" account for successful logins.', isMalicious: true, correctAction: 'block_ip', asset: { name: 'WEB-SRV-01', os: 'Linux (Ubuntu 20.04)', user: 'admin', location: 'DMZ' }, threatIntel: { '103.22.182.5': 'Known malicious actor associated with brute-force botnets.' } },
+        { id: 3, severity: 'Low', title: 'Scheduled Vulnerability Scan', description: 'High number of connections from internal scanner. Corresponds with weekly scheduled scan.', source_ip: '10.0.0.25', destination_ip: '10.0.0.0/24', recommendation: 'Verify activity corresponds to a scheduled task. If so, close as a false positive.', isMalicious: false, correctAction: 'false_positive', asset: { name: 'VULN-SCANNER-01', os: 'Appliance', user: 'scanner_svc', location: 'Utility VLAN' }, threatIntel: { '10.0.0.25': 'Internal Tenable Nessus Scanner. Benign.' } },
+        { id: 4, severity: 'High', title: 'Anomalous Outbound Traffic to C2', description: 'Host communicating with a known command-and-control server IP over port 443.', source_ip: '192.168.2.45', destination_ip: '45.137.21.152', recommendation: 'Isolate host immediately. This indicates a likely compromise.', isMalicious: true, correctAction: 'isolate', asset: { name: 'DEV-PC-23', os: 'Windows 10 Pro', user: 's.rogers', location: 'Development Wing' }, threatIntel: { '45.137.21.152': 'Confirmed C2 server for Cobalt Strike malware.' } },
+        { id: 5, severity: 'Medium', title: 'Phishing Email Link Clicked', description: 'User reported a phishing email. EDR logs show user clicked the link.', source_ip: 'N/A', destination_ip: 'N/A', recommendation: 'Isolate host as a precaution and perform malware scan. Check if credentials were entered.', isMalicious: true, correctAction: 'isolate', asset: { name: 'JDOE-PC', os: 'Windows 11 Ent', user: 'j.doe', location: 'Sales Floor' }, threatIntel: {} },
+        { id: 6, severity: 'Critical', title: 'Potential SQL Injection Attempt', description: "WAF blocked a request to 'login.php' containing suspicious SQL syntax ' OR 1=1; --'.", source_ip: '203.0.113.75', destination_ip: '10.0.0.10', recommendation: 'WAF blocked the attempt, but the source IP should be blocked to prevent further attempts.', isMalicious: true, correctAction: 'block_ip', asset: { name: 'WAF-01', os: 'Appliance', user: 'N/A', location: 'DMZ' }, threatIntel: { '203.0.113.75': 'IP with low reputation, frequently involved in web scanning.' } },
+        { id: 7, severity: 'Low', title: 'Port Scan Detected', description: 'IP performed a port scan on 15 hosts. IP belongs to internal vulnerability scanner.', source_ip: '10.0.0.25', destination_ip: 'Multiple', recommendation: 'Expected behavior from vulnerability scanner. Close as false positive.', isMalicious: false, correctAction: 'false_positive', asset: { name: 'VULN-SCANNER-01', os: 'Appliance', user: 'scanner_svc', location: 'Utility VLAN' }, threatIntel: { '10.0.0.25': 'Internal Tenable Nessus Scanner. Benign.' } },
+        { id: 8, severity: 'Medium', title: 'PowerShell Empire Execution', description: 'EDR detected suspicious PowerShell command consistent with Empire post-exploitation framework.', source_ip: '192.168.3.18', destination_ip: 'N/A', recommendation: 'Isolate host immediately. Strong indicator of an active attacker.', isMalicious: true, correctAction: 'isolate', asset: { name: 'HR-PC-02', os: 'Windows 10 Pro', user: 'p.potts', location: 'Human Resources' }, threatIntel: { '192.168.3.18': 'Internal IP, likely compromised.' } },
+        { id: 9, severity: 'High', title: 'Anomalous Data Staging', description: 'Large volume of data (5GB) compressed into a single .zip file in a temp directory on a critical server.', source_ip: '10.0.5.120', destination_ip: '10.0.5.120', recommendation: 'This may be a precursor to data exfiltration. Isolate the server and investigate the process that created the file.', isMalicious: true, correctAction: 'isolate', asset: { name: 'DB-SRV-03', os: 'Linux (CentOS)', user: 'oracle', location: 'Data Center' }, threatIntel: { '10.0.5.120': 'Internal Database Server.' } },
+        { id: 10, severity: 'Critical', title: 'Impossible Travel Alert', description: "User 't.stark' logged in from California, USA and 15 minutes later from a new IP in Romania.", source_ip: '188.25.10.91', destination_ip: 'N/A', recommendation: 'This is a strong indicator of a compromised account. Block the suspicious IP and force a password reset for the user.', isMalicious: true, correctAction: 'block_ip', asset: { name: 'VPN Concentrator', os: 'Appliance', user: 't.stark', location: 'Edge' }, threatIntel: { '188.25.10.91': 'Unrecognized IP originating from Romania.' } },
+    ];
+    const vulnerabilityData = [
+        { cve: 'CVE-2023-38843', severity: 'Critical', description: 'WinRAR Remote Code Execution Vulnerability', assets: 150, status: 'Patching' },
+        { cve: 'CVE-2023-29357', severity: 'High', description: 'Microsoft SharePoint Server Elevation of Privilege', assets: 25, status: 'Pending' },
+        { cve: 'CVE-2024-21413', severity: 'High', description: 'Microsoft Outlook Remote Code Execution Vulnerability', assets: 320, status: 'Mitigated' },
+        { cve: 'CVE-2024-30044', severity: 'Medium', description: 'Microsoft SharePoint Server Remote Code Execution', assets: 45, status: 'Pending' },
+        { cve: 'CVE-2022-22965', severity: 'Critical', description: 'Spring4Shell RCE Vulnerability', assets: 12, status: 'Patched' },
+        { cve: 'CVE-2021-44228', severity: 'Critical', description: 'Apache Log4j (Log4Shell) RCE Vulnerability', assets: 5, status: 'Patched' },
+        { cve: 'CVE-2024-27198', severity: 'High', description: 'JetBrains TeamCity Authentication Bypass', assets: 8, status: 'Pending' },
+    ];
+    const knowledgebaseData = [
+        { name: 'A01: Broken Access Control', type: 'Web Vulnerability', description: 'Restrictions on what authenticated users are allowed to do are not properly enforced. Attackers can exploit these flaws to access unauthorized functionality and/or data.', examples: ['Path traversal', 'CWE-22', 'Forced browsing'] },
+        { name: 'A02: Cryptographic Failures', type: 'Web Vulnerability', description: 'Failures related to cryptography (or lack thereof) which can lead to exposure of sensitive data. Previously known as Sensitive Data Exposure.', examples: ['Cleartext transport', 'Weak ciphers', 'CWE-310'] },
+        { name: 'A03: Injection', type: 'Web Vulnerability', description: 'Flaws that allow untrusted user data to be interpreted and executed as part of a command or query. SQL, NoSQL, OS, and LDAP injection are common examples.', examples: ['SQL Injection', 'Cross-Site Scripting (XSS)', 'CWE-79'] },
+        { name: 'A04: Insecure Design', type: 'Web Vulnerability', description: 'A new category focusing on risks related to design and architectural flaws, calling for more use of threat modeling and secure design patterns.', examples: ['Lack of threat modeling', 'Insecure business logic'] },
+        { name: 'A05: Security Misconfiguration', type: 'Web Vulnerability', description: 'Incorrectly configured security settings, such as default credentials, open cloud storage, misconfigured HTTP headers, and verbose error messages.', examples: ['Default credentials', 'Open S3 buckets', 'CWE-16'] },
+        { name: 'A06: Vulnerable and Outdated Components', type: 'Web Vulnerability', description: 'Using components, such as libraries and frameworks, with known vulnerabilities. This can undermine application defenses and enable various attacks.', examples: ['Log4Shell', 'Unpatched libraries', 'CWE-937'] },
+        { name: 'A07: Identification and Authentication Failures', type: 'Web Vulnerability', description: 'Incorrectly implemented functions related to user identity, authentication, and session management, allowing attackers to compromise passwords, keys, or session tokens.', examples: ['Brute-force attacks', 'No multi-factor auth', 'CWE-287'] },
+        { name: 'A08: Software and Data Integrity Failures', type: 'Web Vulnerability', description: 'Failures related to software updates, critical data, and CI/CD pipelines without verifying integrity. Includes insecure deserialization.', examples: ['Insecure deserialization', 'Software update tampering', 'CWE-502'] },
+        { name: 'A09: Security Logging and Monitoring Failures', type: 'Web Vulnerability', description: 'Insufficient logging, monitoring, or incident response. Without these, it is difficult to detect and respond to attacks.', examples: ['No/inadequate logging', 'No alert thresholds', 'CWE-778'] },
+        { name: 'A10: Server-Side Request Forgery (SSRF)', type: 'Web Vulnerability', description: 'Flaws where a web application is fetching a remote resource without validating the user-supplied URL, forcing the application to send a crafted request to an unexpected destination.', examples: ['Accessing internal services', 'Port scanning', 'CWE-918'] }
+    ];
+
+    // --- NAVIGATION ---
+    navButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const targetPageId = button.dataset.page;
+            
+            pages.forEach(page => page.classList.toggle('hidden', page.id !== targetPageId));
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            siemStatsEl.classList.toggle('hidden', targetPageId !== 'siem-page');
+
+            if (targetPageId === 'siem-page') {
+                initSiem();
+            } else if (targetPageId === 'vulnerability-page') {
+                renderVulnerabilities();
+            } else if (targetPageId === 'knowledgebase-page') {
+                renderKnowledgebase();
+            }
+        });
+    });
+
+    // --- SIEM FUNCTIONS ---
+    function initSiem() {
+        score = 0;
+        activeAlerts = [];
+        alertQueue = [...shuffleArray(alertsData)];
+        scoreEl.textContent = score;
+        currentAlert = null;
+
+        alertsFeedEl.innerHTML = `
+            <div class="flex-grow flex items-end justify-center pb-4">
+                <p class="text-xs text-gray-500 opacity-50 header-title">-- STANDING BY FOR INCOMING DATA --</p>
+            </div>
+        `;
+        alertDetailsEl.classList.add('hidden');
+        initialMessageEl.classList.remove('hidden');
+
+        clearInterval(alertInterval);
+        alertInterval = setInterval(spawnAlert, 2500);
+        
+        modalEl.classList.add('hidden');
+        updateAlertsRemaining();
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+        return array;
+    }
+
+    function spawnAlert() {
+        if (alertQueue.length === 0) {
+            clearInterval(alertInterval);
+            return;
+        }
+        const alertData = alertQueue.shift();
+        activeAlerts.push(alertData);
+        renderAlert(alertData);
+        updateAlertsRemaining();
+    }
+    
+    function getSeverityClass(severity) {
+        switch (severity.toLowerCase()) {
+            case 'critical': return 'border-red-500';
+            case 'high': return 'border-orange-500';
+            case 'medium': return 'border-yellow-500';
+            case 'low': return 'border-blue-500';
+            default: return 'border-gray-600';
+        }
+    }
+
+    function renderAlert(alertData) {
+        const alertEl = document.createElement('div');
+        alertEl.id = `alert-${alertData.id}`;
+        alertEl.className = `alert-item cursor-pointer p-3 rounded-lg ${getSeverityClass(alertData.severity)}`;
+        alertEl.dataset.alertId = alertData.id;
+        alertEl.innerHTML = `<div class="flex justify-between items-center"><p class="font-semibold text-sm">${alertData.title}</p><span class="text-xs px-2 py-1 rounded-full">${alertData.severity}</span></div><p class="text-xs text-gray-400 mt-1">${new Date().toLocaleTimeString()}</p>`;
+        alertEl.addEventListener('click', () => displayAlertDetails(alertData.id));
+        alertsFeedEl.prepend(alertEl);
+    }
+    
+    function typewriterEffect(element, text, onComplete) {
+        let i = 0;
+        element.textContent = ''; // Use textContent to prevent DOM re-parsing
+        const cursor = document.createElement('span');
+        cursor.className = 'blinking-cursor';
+        cursor.innerHTML = '&#9646;';
+        element.appendChild(cursor);
+        function type() {
+            if (i < text.length) {
+                cursor.before(text.charAt(i));
+                i++;
+                setTimeout(type, 10);
+            } else {
+                cursor.remove();
+                if (onComplete) onComplete();
+            }
+        }
+        type();
+    }
+
+    function displayAlertDetails(alertId) {
+        const currentlySelected = document.querySelector('.alert-item.selected');
+        if (currentlySelected) {
+            currentlySelected.classList.remove('selected');
+        }
+        const clickedEl = document.getElementById(`alert-${alertId}`);
+        if (clickedEl) {
+            clickedEl.classList.add('selected');
+        }
+        
+        currentAlert = activeAlerts.find(a => a.id === alertId);
+        if (!currentAlert) return;
+
+        initialMessageEl.classList.add('hidden');
+        alertDetailsEl.classList.remove('hidden');
+
+        // Update the static panel with new data
+        detailsTitleEl.textContent = currentAlert.title;
+        detailsSeverityEl.textContent = currentAlert.severity;
+        detailsSeverityEl.className = `text-sm font-semibold px-3 py-1 rounded-full border ${getSeverityClass(currentAlert.severity)}`;
+        detailsAssetHostEl.textContent = currentAlert.asset.name;
+        detailsAssetOsEl.textContent = currentAlert.asset.os;
+        detailsAssetUserEl.textContent = currentAlert.asset.user;
+        detailsAssetLocationEl.textContent = currentAlert.asset.location;
+        
+        detailsSourceIpEl.textContent = currentAlert.source_ip;
+        detailsSourceIpEl.dataset.ip = currentAlert.source_ip;
+        
+        detailsDestIpEl.textContent = currentAlert.destination_ip;
+        detailsDestIpEl.dataset.ip = currentAlert.destination_ip;
+        
+        threatIntelContentEl.textContent = 'Scan an IP for details...';
+        
+        actionButtons.forEach(btn => btn.disabled = true);
+        
+        typewriterEffect(alertDescriptionPEl, currentAlert.description, () => {
+            typewriterEffect(alertRecommendationPEl, currentAlert.recommendation, () => {
+                 actionButtons.forEach(btn => btn.disabled = false);
+            });
+        });
+    }
+
+    function takeAction(action) {
+        if (!currentAlert) return;
+        const alertId = currentAlert.id;
+
+        updateScore(action === currentAlert.correctAction ? (currentAlert.isMalicious ? 15 : 10) : -10);
+        
+        const alertEl = document.getElementById(`alert-${alertId}`);
+        if (alertEl) {
+            alertEl.classList.add('opacity-0', 'transform', '-translate-x-full');
+            setTimeout(() => alertEl.remove(), 300);
+        }
+        
+        activeAlerts = activeAlerts.filter(a => a.id !== alertId);
+        
+        initialMessageEl.classList.remove('hidden');
+        alertDetailsEl.classList.add('hidden');
+        currentAlert = null;
+        
+        updateAlertsRemaining();
+
+        if (alertQueue.length === 0 && activeAlerts.length === 0) {
+            endGame();
+        }
+    }
+
+    function updateScore(points) { score += points; scoreEl.textContent = score; }
+
+    function updateSystemStatus() {
+        const severities = activeAlerts.map(a => a.severity);
+        if (severities.includes('Critical')) { systemStatusEl.textContent = "CRITICAL"; systemStatusEl.className = 'font-bold status-critical'; } 
+        else if (severities.includes('High')) { systemStatusEl.textContent = "ELEVATED"; systemStatusEl.className = 'font-bold status-elevated'; } 
+        else { systemStatusEl.textContent = "NOMINAL"; systemStatusEl.className = 'font-bold status-nominal'; }
+    }
+
+    function updateAlertsRemaining() {
+        const remaining = alertQueue.length + activeAlerts.length;
+        alertsRemainingEl.textContent = remaining;
+        updateSystemStatus();
+    }
+
+    function endGame() {
+        modalTitleEl.textContent = "Simulation Complete";
+        let feedback = `Final Score: ${score}. `;
+        if (score >= 100) feedback += "Performance exceptional. Threat neutralization efficiency optimal.";
+        else if (score >= 50) feedback += "System integrity maintained. Review incident logs for performance enhancement.";
+        else feedback += "Anomalies detected in response protocol. Recommend further training cycles.";
+        modalBodyEl.textContent = feedback;
+        modalEl.classList.remove('hidden');
+        systemStatusEl.textContent = "OFFLINE";
+        systemStatusEl.className = 'font-bold text-gray-500';
+    }
+
+    // --- VULNERABILITY FUNCTIONS ---
+    function renderVulnerabilities() {
+        const sortedData = [...vulnerabilityData].sort((a, b) => {
+            const severities = { 'Critical': 4, 'High': 3, 'Medium': 2, 'Low': 1 };
+            return (severities[b.severity] || 0) - (severities[a.severity] || 0);
+        });
+        let tableHTML = `<table class="cyber-table"><thead><tr><th>CVE</th><th>Severity</th><th>Description</th><th>Affected Assets</th><th>Status</th></tr></thead><tbody>`;
+        for (const vuln of sortedData) {
+            tableHTML += `<tr>
+                <td class="font-semibold">${vuln.cve}</td>
+                <td class="font-bold severity-${vuln.severity}">${vuln.severity}</td>
+                <td>${vuln.description}</td>
+                <td>${vuln.assets}</td>
+                <td>${vuln.status}</td>
+            </tr>`;
+        }
+        tableHTML += `</tbody></table>`;
+        vulnContainer.innerHTML = tableHTML;
+    }
+
+    // --- KNOWLEDGEBASE FUNCTIONS ---
+    function renderKnowledgebase(filter = '') {
+        const filteredData = knowledgebaseData.filter(item => item.name.toLowerCase().includes(filter.toLowerCase()));
+        kbContentEl.innerHTML = '';
+        if (filteredData.length === 0) {
+            kbContentEl.innerHTML = `<p class="text-gray-400">No entries found for "${filter}".</p>`;
+            return;
+        }
+        filteredData.forEach(item => {
+            const entryEl = document.createElement('div');
+            entryEl.className = 'p-4 mb-3 bg-black/20 rounded-md border border-transparent hover:border-[var(--primary-color)] transition-all';
+            entryEl.innerHTML = `
+                <h3 class="text-xl font-bold header-title text-white">${item.name} <span class="text-sm font-light text-gray-400">(${item.type})</span></h3>
+                <p class="text-gray-300 mt-2">${item.description}</p>
+                <div class="mt-3">
+                    <h4 class="font-semibold text-[var(--primary-color)] text-sm">Common Examples</h4>
+                    <div class="flex flex-wrap gap-2 mt-1">
+                        ${item.examples.map(ex => `<code class="text-xs bg-gray-800 px-2 py-1 rounded">${ex}</code>`).join('')}
+                    </div>
+                </div>
+            `;
+            kbContentEl.appendChild(entryEl);
+        });
+    }
+
+    // --- INITIALIZATION ---
+    actionButtons.forEach(button => {
+        button.addEventListener('click', (e) => takeAction(e.target.dataset.action));
+    });
+    
+    document.querySelectorAll('.ip-lookup').forEach(el => {
+        el.addEventListener('click', (e) => {
+            if (!currentAlert) return;
+            const ip = e.target.dataset.ip;
+            const intel = currentAlert.threatIntel[ip] || "No intelligence available for this IP.";
+            typewriterEffect(threatIntelContentEl, `Scanning ${ip}... ${intel}`);
+        });
+    });
+
+    restartBtn.addEventListener('click', initSiem);
+    modalCloseBtn.addEventListener('click', initSiem);
+    kbSearchInput.addEventListener('input', (e) => renderKnowledgebase(e.target.value));
+    
+    // Start on SIEM page
+    initSiem();
+});
+</script>
+</body>
+</html>
+
